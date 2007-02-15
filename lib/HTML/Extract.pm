@@ -2,11 +2,14 @@ package HTML::Extract;
 
 use 5.008006;
 use strict;
+use utf8;
 use warnings;
 use HTML::TreeBuilder;
 use HTML::Element;
 use LWP::UserAgent;
-
+use HTML::Parser;
+use Encode;
+# use encoding 'utf8';
 
 require Exporter;
 
@@ -29,7 +32,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.15';
+our $VERSION = '0.25';
 
 
 # Preloaded methods go here.
@@ -109,13 +112,20 @@ sub gethtml {
 		$self->settagname($tagname) if defined($tagname);	
 		$self->settagid($tagid) if defined($tagid);	
 
-		my $browser=LWP::UserAgent->new();
+		my $browser=LWP::UserAgent->new(
+			'Accept-Charset' => 'utf-8',
+		);
 		# my $tf=HTML::TagFilter->new(allow=>{});
 		my $tree = HTML::TreeBuilder->new();
 		my $content = $browser->get($uri);
 		return "<b>Couldn't get $uri</b>\n" unless defined $content;
-
-		$tree->parse($content->content) || die "Can't find file\n";
+		# Problem; the system does not know that content has UTF8 flavour
+		# so tell it that it does...
+		my $content2 = $content->content;
+		Encode::_utf8_on($content2);
+		#	$tree->parse($content->content)|| die "Bah! $!\n";
+		$tree->parse($content2)|| die "Bah! $!\n";
+		$tree->eof();
 		my @candidates;
 
 		if($tagclass){
@@ -130,7 +140,8 @@ sub gethtml {
 			if($toreturn eq "text" || $toreturn eq "txt"){
 				return $candidates[0]->as_text();
 			} else {
-				return $candidates[0]->as_HTML();
+				my $text=$candidates[0]->as_HTML();
+				return $text;
 			}
 		} else{
 			return "<b>No candidates found</b>";
